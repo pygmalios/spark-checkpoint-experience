@@ -5,57 +5,47 @@ import java.util.Properties
 import java.util.concurrent.Executors
 
 import kafka.server.{KafkaConfig, KafkaServer}
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
-import org.apache.kafka.common.serialization.{Serializer, StringSerializer}
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig}
+import org.apache.kafka.common.serialization.StringSerializer
 import org.apache.zookeeper.server.{ServerCnxnFactory, ZooKeeperServer}
 
 import scala.collection.JavaConversions.mapAsJavaMap
 import scala.concurrent._
-import scala.concurrent.duration._
 import scala.reflect.io.Directory
-import scala.util.Try
 
 trait EmbeddedKafka {
   private val executorService = Executors.newFixedThreadPool(2)
   implicit private val executionContext = ExecutionContext.fromExecutorService(executorService)
+  private val stringSerializer = new StringSerializer()
 
-  def withKafka(body: => Unit)(implicit config: EmbeddedKafkaConfig) = {
-    val factory = startZooKeeper(config.zooKeeperPort)
-    try {
-      val broker = startKafka(config)
-      try {
-        body
+  def config: EmbeddedKafkaConfig = EmbeddedKafkaConfig()
+
+  def withKafka(body: (RunningEmbeddedKafka) => Unit) = {
+    withZookeeper(config.zooKeeperPort) {
+      withKafkaServer(config) {
+        withProducer(config) { runningEmbeddedKafka =>
+          body(runningEmbeddedKafka)
+        }
       }
-      finally {
-        broker.shutdown()
-      }
-      factory.shutdown()
     }
   }
 
-  def publishStringMessageToKafka(topic: String, message: String)(implicit config: EmbeddedKafkaConfig): Unit =
-    publishToKafka(topic, message)(config, new StringSerializer)
-
-  private def publishToKafka[T](topic: String, message: T)
-                       (implicit config: EmbeddedKafkaConfig, serializer: Serializer[T]): Unit = {
-
+  private def withProducer(config: EmbeddedKafkaConfig)(body: (RunningEmbeddedKafka) => Any): Unit = {
     val kafkaProducer = new KafkaProducer(Map(
       ProducerConfig.BOOTSTRAP_SERVERS_CONFIG -> s"localhost:${config.kafkaPort}",
       ProducerConfig.METADATA_FETCH_TIMEOUT_CONFIG -> 3000.toString,
       ProducerConfig.RETRY_BACKOFF_MS_CONFIG -> 100.toString
-    ), new StringSerializer, serializer)
-
-    val sendFuture = kafkaProducer.send(new ProducerRecord(topic, message))
-    val sendResult = Try {
-      sendFuture.get(3, SECONDS)
+    ), stringSerializer, stringSerializer)
+    val runningEmbeddedKafka = new RunningEmbeddedKafka(kafkaProducer)
+    try {
+      body(runningEmbeddedKafka)
     }
-
-    kafkaProducer.close()
-
-    if (sendResult.isFailure) throw new KafkaUnavailableException
+    finally {
+      runningEmbeddedKafka.close()
+    }
   }
 
-  private def startZooKeeper(zooKeeperPort: Int): ServerCnxnFactory = {
+  private def withZookeeper(zooKeeperPort: Int)(body: => Any): Unit = {
     val zkLogsDir = Directory.makeTemp("zookeeper-logs")
     val tickTime = 2000
 
@@ -64,10 +54,15 @@ trait EmbeddedKafka {
     val factory = ServerCnxnFactory.createFactory
     factory.configure(new InetSocketAddress("localhost", zooKeeperPort), 1024)
     factory.startup(zkServer)
-    factory
+    try {
+      body
+    }
+    finally {
+      factory.shutdown()
+    }
   }
 
-  private def startKafka(config: EmbeddedKafkaConfig): KafkaServer = {
+  private def withKafkaServer(config: EmbeddedKafkaConfig)(body: => Any): Unit = {
     val kafkaLogDir = Directory.makeTemp("kafka")
 
     val zkAddress = s"localhost:${config.zooKeeperPort}"
@@ -83,6 +78,11 @@ trait EmbeddedKafka {
 
     val broker = new KafkaServer(new KafkaConfig(properties))
     broker.startup()
-    broker
+    try {
+      body
+    }
+    finally {
+      broker.shutdown()
+    }
   }
 }

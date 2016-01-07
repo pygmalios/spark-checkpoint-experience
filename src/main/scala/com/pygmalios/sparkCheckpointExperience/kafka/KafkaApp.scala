@@ -8,14 +8,14 @@ import com.pygmalios.sparkCheckpointExperience.kafka.embedded.EmbeddedKafka
   */
 object KafkaApp extends App with EmbeddedKafka with Logging {
   log.info("Starting Kafka.")
-  withKafka {
+  withKafka { kafka =>
     log.info("Running Kafka.")
 
     log.info("msg1")
-    publishStringMessageToKafka("topic", "msg1")
+    kafka.publish("topic", "msg1")
 
     log.info("msg2")
-    publishStringMessageToKafka("topic", "msg2")
+    kafka.publish("topic", "msg2")
   }
   log.info("Kafka stopped.")
 }
