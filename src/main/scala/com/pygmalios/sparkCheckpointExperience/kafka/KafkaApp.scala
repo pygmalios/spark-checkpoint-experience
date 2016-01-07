@@ -1,21 +1,13 @@
 package com.pygmalios.sparkCheckpointExperience.kafka
 
-import com.pygmalios.sparkCheckpointExperience.Logging
 import com.pygmalios.sparkCheckpointExperience.kafka.embedded.EmbeddedKafka
 
 /**
   * Embedded Apache Kafka.
   */
-object KafkaApp extends App with EmbeddedKafka with Logging {
-  log.info("Starting Kafka.")
+object KafkaApp extends App with EmbeddedKafka {
   withKafka { kafka =>
-    log.info("Running Kafka.")
-
-    log.info("msg1")
-    kafka.publish("topic", "msg1")
-
-    log.info("msg2")
-    kafka.publish("topic", "msg2")
+    kafka.publish("t1", "k1", "m1")
+    kafka.publish("t2", "m2")
   }
-  log.info("Kafka stopped.")
 }

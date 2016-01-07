@@ -17,8 +17,10 @@
     <logger name="org.apache.spark" level="WARN" />
     <logger name="org.spark-project.jetty" level="WARN"/>
 
-    <!-- Out logging -->
-    <logger name="com.buransky" level="DEBUG"/>
+    <!-- Our logging -->
+    <logger name="com.pygmalios.sparkCheckpointExperience" level="DEBUG"/>
+    <logger name="com.pygmalios.sparkCheckpointExperience.kafka.zkServer" level="INFO"/>
+    <logger name="com.pygmalios.sparkCheckpointExperience.kafka.kafkaServer" level="INFO"/>
 
     <root level="INFO">
         <appender-ref ref="STDOUT" />
