@@ -15,8 +15,10 @@ object KafkaApp extends App with EmbeddedKafka {
   private val counter = new AtomicInteger()
   private val negativeFlag = new AtomicBoolean()
 
+  // Start Zookeeper and Kafka, create topic
   withKafka { kafka =>
-    val timerTask = publishEverySecond(kafka)
+    // Publish a message every 1 second
+    val timerTask = schedulePublishing(kafka, 1000)
     try {
       readFromConsole()
     }
@@ -43,7 +45,7 @@ object KafkaApp extends App with EmbeddedKafka {
     loop()
   }
 
-  private def publishEverySecond(kafka: RunningEmbeddedKafka): TimerTask = {
+  private def schedulePublishing(kafka: RunningEmbeddedKafka, everyMs: Int): TimerTask = {
     val t = new java.util.Timer()
     val task = new java.util.TimerTask {
       def run(): Unit = {
@@ -53,7 +55,7 @@ object KafkaApp extends App with EmbeddedKafka {
       }
     }
 
-    t.schedule(task, 1000L, 1000L)
+    t.schedule(task, everyMs, everyMs)
     task
   }
 }
