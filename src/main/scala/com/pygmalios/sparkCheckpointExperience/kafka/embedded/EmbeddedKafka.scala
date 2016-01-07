@@ -11,8 +11,7 @@ import org.apache.kafka.common.serialization.StringSerializer
 import org.apache.zookeeper.server.{ServerCnxnFactory, ZooKeeperServer}
 import org.slf4j.LoggerFactory
 
-import scala.collection.JavaConversions.mapAsJavaMap
-import scala.collection.JavaConversions._
+import scala.collection.JavaConversions.{mapAsJavaMap, _}
 import scala.concurrent._
 import scala.reflect.io.Directory
 
@@ -21,13 +20,15 @@ trait EmbeddedKafka extends Logging {
   implicit private val executionContext = ExecutionContext.fromExecutorService(executorService)
   private val stringSerializer = new StringSerializer()
 
-  def config: EmbeddedKafkaConfig = EmbeddedKafkaConfig()
+  // Override these values if needed
+  def confZkPort = 6000
+  def confKafkaServerPort = 6001
 
   def withKafka(body: (RunningEmbeddedKafka) => Unit) = {
     try {
-      withZookeeper(config.zooKeeperPort) {
-        withKafkaServer(config) {
-          withProducer(config) { runningEmbeddedKafka =>
+      withZookeeper {
+        withKafkaServer {
+          withProducer { runningEmbeddedKafka =>
             body(runningEmbeddedKafka)
           }
         }
@@ -40,12 +41,22 @@ trait EmbeddedKafka extends Logging {
     }
   }
 
-  private def withProducer(config: EmbeddedKafkaConfig)(body: (RunningEmbeddedKafka) => Any): Unit = {
-    val kafkaProducer = new KafkaProducer(Map(
-      ProducerConfig.BOOTSTRAP_SERVERS_CONFIG -> s"localhost:${config.kafkaPort}",
+  private def withProducer(body: (RunningEmbeddedKafka) => Any): Unit = {
+    val log = getSublog("kafkaProducer")
+    val config = Map(
+      ProducerConfig.BOOTSTRAP_SERVERS_CONFIG -> s"localhost:$confKafkaServerPort",
       ProducerConfig.METADATA_FETCH_TIMEOUT_CONFIG -> 3000.toString,
-      ProducerConfig.RETRY_BACKOFF_MS_CONFIG -> 100.toString
-    ), stringSerializer, stringSerializer)
+      ProducerConfig.RETRY_BACKOFF_MS_CONFIG -> 10.toString
+    )
+    val kafkaProducer = new KafkaProducer(config, stringSerializer, stringSerializer)
+
+    if (log.isDebugEnabled) {
+      log.debug(s"Kafka producer config:")
+      config.toList.sortBy(_._1).foreach { case (k, v) =>
+        log.debug(s"    $k = $v")
+      }
+    }
+
     val runningEmbeddedKafka = new RunningEmbeddedKafka(kafkaProducer)
     try {
       body(runningEmbeddedKafka)
@@ -55,7 +66,7 @@ trait EmbeddedKafka extends Logging {
     }
   }
 
-  private def withZookeeper(zooKeeperPort: Int)(body: => Any): Unit = {
+  private def withZookeeper(body: => Any): Unit = {
     val log = getSublog("zkServer")
     val zkLogsDir = Directory.makeTemp("zookeeper-logs")
     val tickTime = 2000
@@ -63,13 +74,13 @@ trait EmbeddedKafka extends Logging {
     val zkServer = new ZooKeeperServer(zkLogsDir.toFile.jfile, zkLogsDir.toFile.jfile, tickTime)
 
     val factory = ServerCnxnFactory.createFactory
-    factory.configure(new InetSocketAddress("localhost", zooKeeperPort), 1024)
+    factory.configure(new InetSocketAddress("localhost", confZkPort), 1024)
 
-    log.debug(s"Zookeeper port: $zooKeeperPort")
+    log.debug(s"Zookeeper port: $confZkPort")
     log.debug(s"Zookeeper logs directory: ${zkLogsDir.toFile}")
     log.debug(s"Starting Zookeeper server ...")
     factory.startup(zkServer)
-    log.info(s"Zookeeper started on localhost:$zooKeeperPort")
+    log.info(s"Zookeeper started on localhost:$confZkPort")
 
     try {
       body
@@ -81,29 +92,31 @@ trait EmbeddedKafka extends Logging {
     }
   }
 
-  private def withKafkaServer(config: EmbeddedKafkaConfig)(body: => Any): Unit = {
+  private def withKafkaServer(body: => Any): Unit = {
     val log = getSublog("kafkaServer")
 
     val kafkaLogDir = Directory.makeTemp("kafka")
 
-    val zkAddress = s"localhost:${config.zooKeeperPort}"
-
     val properties: Properties = new Properties
-    properties.setProperty("zookeeper.connect", zkAddress)
+    properties.setProperty("zookeeper.connect", s"localhost:$confZkPort")
     properties.setProperty("broker.id", "0")
     properties.setProperty("host.name", "localhost")
     properties.setProperty("auto.create.topics.enable", "true")
-    properties.setProperty("port", config.kafkaPort.toString)
+    properties.setProperty("port", confKafkaServerPort.toString)
     properties.setProperty("log.dir", kafkaLogDir.toAbsolute.path)
     properties.setProperty("log.flush.interval.messages", 1.toString)
 
-    properties.toList.sortBy(_._1).foreach { case (k, v) =>
-      log.debug(s"Kafka server config: $k -> $v")
+    val kafkaConfig = new KafkaConfig(properties)
+    if (log.isDebugEnabled) {
+      log.debug(s"Kafka server config:")
+      kafkaConfig.props.props.toList.sortBy(_._1).foreach { case (k, v) =>
+        log.debug(s"    $k = $v")
+      }
     }
 
     log.debug(s"Starting Kafka server...")
-    val broker = new KafkaServer(new KafkaConfig(properties))
-    log.info(s"Kafka server started on localhost:${config.kafkaPort}")
+    val broker = new KafkaServer(kafkaConfig)
+    log.info(s"Kafka server started on localhost:$confKafkaServerPort")
 
     broker.startup()
     try {
@@ -113,6 +126,7 @@ trait EmbeddedKafka extends Logging {
       log.debug(s"Shutting down Kafka server...")
       broker.shutdown()
       log.info(s"Kafka server shut down")
+      kafkaLogDir.deleteIfExists()
     }
   }
 

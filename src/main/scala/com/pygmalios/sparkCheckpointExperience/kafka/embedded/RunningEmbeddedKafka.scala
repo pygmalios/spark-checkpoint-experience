@@ -12,7 +12,7 @@ class RunningEmbeddedKafka(producer: KafkaProducer[String, String]) extends Clos
 
   def publish(topic: String, key: String, message: String): Unit = {
     producer.send(new ProducerRecord(topic, key, message)).get(3, SECONDS)
-    log.debug(s"Mesage published to $topic. [$key -> $message]")
+    log.info(s"$topic: $key -> $message")
   }
 
   override def close(): Unit = producer.close()

@@ -21,6 +21,7 @@
     <logger name="com.pygmalios.sparkCheckpointExperience" level="DEBUG"/>
     <logger name="com.pygmalios.sparkCheckpointExperience.kafka.zkServer" level="INFO"/>
     <logger name="com.pygmalios.sparkCheckpointExperience.kafka.kafkaServer" level="INFO"/>
+    <logger name="com.pygmalios.sparkCheckpointExperience.kafka.kafkaProducer" level="INFO"/>
 
     <root level="INFO">
         <appender-ref ref="STDOUT" />
