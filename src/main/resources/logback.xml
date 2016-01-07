@@ -16,6 +16,7 @@
     <!-- Spark logging -->
     <logger name="org.apache.spark" level="WARN" />
     <logger name="org.spark-project.jetty" level="WARN"/>
+    <logger name="WriteAheadLogManager  for Thread" level="WARN"/>
 
     <!-- Our logging -->
     <logger name="com.pygmalios.sparkCheckpointExperience" level="DEBUG"/>
