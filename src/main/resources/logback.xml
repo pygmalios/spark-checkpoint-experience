@@ -1,0 +1,26 @@
+<configuration>
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>[%level] [%date{ISO8601}] [%logger]: %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Kafka logging -->
+    <logger name="org.apache.zookeeper" level="WARN"/>
+    <logger name="org.apache.kafka" level="WARN" />
+    <logger name="org.apache.kafka.clients.producer.ProducerConfig" level="ERROR" />
+    <logger name="kafka" level="WARN" />
+    <logger name="kafka.cluster.Partition" level="ERROR" />
+    <logger name="org.I0Itec.zkclient" level="WARN" />
+
+    <!-- Spark logging -->
+    <logger name="org.apache.spark" level="WARN" />
+    <logger name="org.spark-project.jetty" level="WARN"/>
+
+    <!-- Out logging -->
+    <logger name="com.buransky" level="DEBUG"/>
+
+    <root level="INFO">
+        <appender-ref ref="STDOUT" />
+    </root>
+</configuration>

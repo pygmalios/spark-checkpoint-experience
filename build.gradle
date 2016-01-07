@@ -28,11 +28,11 @@ dependencies {
     compile "ch.qos.logback:logback-classic:1.1.3"
     compile "org.slf4j:log4j-over-slf4j:1.7.13"
 
+    compile "org.apache.kafka:kafka_$scalaVersion:0.8.2.2"
+
     compile "org.apache.spark:spark-core_$scalaVersion:$sparkVersion"
     compile "org.apache.spark:spark-streaming_$scalaVersion:$sparkVersion"
     compile "org.apache.spark:spark-streaming-kafka_$scalaVersion:$sparkVersion"
-
-    compile "net.manub:scalatest-embedded-kafka_$scalaVersion:0.4.1"
 }
 
 configurations.all {
