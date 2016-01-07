@@ -6,6 +6,7 @@ import java.util.concurrent.Executors
 
 import com.pygmalios.sparkCheckpointExperience.Logging
 import kafka.admin.AdminUtils
+import kafka.consumer.SimpleConsumer
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.ZKStringSerializer
 import org.I0Itec.zkclient.ZkClient
@@ -55,20 +56,23 @@ trait EmbeddedKafka extends Logging {
       ProducerConfig.RETRY_BACKOFF_MS_CONFIG -> 10.toString
     )
     val kafkaProducer = new KafkaProducer(config, stringSerializer, stringSerializer)
+    try {
+      if (log.isDebugEnabled) {
+        log.debug(s"Kafka producer config:")
+        logProperties(config.toList)
+      }
 
-    if (log.isDebugEnabled) {
-      log.debug(s"Kafka producer config:")
-      config.toList.sortBy(_._1).foreach { case (k, v) =>
-        log.debug(s"    $k = $v")
+      val simpleConsumer = new SimpleConsumer("localhost", confKafkaServerPort, 1000000, 64 * 1024, "")
+      try {
+
+        body(new RunningEmbeddedKafka(kafkaProducer, simpleConsumer, topic))
+      }
+      finally {
+        simpleConsumer.close()
       }
     }
-
-    val runningEmbeddedKafka = new RunningEmbeddedKafka(kafkaProducer)
-    try {
-      body(runningEmbeddedKafka)
-    }
     finally {
-      runningEmbeddedKafka.close()
+      kafkaProducer.close()
     }
   }
 
@@ -123,9 +127,7 @@ trait EmbeddedKafka extends Logging {
     val kafkaConfig = new KafkaConfig(properties)
     if (log.isDebugEnabled) {
       log.debug(s"Kafka server config:")
-      kafkaConfig.props.props.toList.sortBy(_._1).foreach { case (k, v) =>
-        log.debug(s"    $k = $v")
-      }
+      logProperties(kafkaConfig.props.props.toList)
     }
 
     log.debug(s"Starting Kafka server...")
@@ -136,10 +138,16 @@ trait EmbeddedKafka extends Logging {
     try {
       // Log retention starts working only after 30 seconds from server start: LogManager.InitialTaskDelayMs
       val topicProperties = new Properties()
-      topicProperties.setProperty("retention.ms", (retentionSec*10).toString)
+      topicProperties.setProperty("retention.ms", (retentionSec*1000).toString)
       topicProperties.setProperty("segment.ms", "1000")
       topicProperties.setProperty("cleanup.policy", "delete")
       topicProperties.setProperty("delete.retention.ms", "1000")
+
+      if (log.isDebugEnabled) {
+        log.debug(s"Topic properties:")
+        logProperties(topicProperties.toList)
+      }
+
       AdminUtils.createTopic(zkClient, topic, 1, 1, topicProperties)
       log.info(s"Topic $topic created with $retentionSec sec retention (starts 30 seconds after server start)")
 
@@ -154,4 +162,10 @@ trait EmbeddedKafka extends Logging {
   }
 
   private def getSublog(name: String) = LoggerFactory.getLogger(getClass.getPackage.getName + "." + name)
+
+  private def logProperties(props: Seq[(String, String)]): Unit = {
+    props.sortBy(_._1).foreach { case (k, v) =>
+      log.debug(s"    $k = $v")
+    }
+  }
 }
