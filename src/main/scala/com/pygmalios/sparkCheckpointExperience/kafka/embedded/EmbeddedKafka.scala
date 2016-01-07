@@ -5,7 +5,10 @@ import java.util.Properties
 import java.util.concurrent.Executors
 
 import com.pygmalios.sparkCheckpointExperience.Logging
+import kafka.admin.AdminUtils
 import kafka.server.{KafkaConfig, KafkaServer}
+import kafka.utils.ZKStringSerializer
+import org.I0Itec.zkclient.ZkClient
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig}
 import org.apache.kafka.common.serialization.StringSerializer
 import org.apache.zookeeper.server.{ServerCnxnFactory, ZooKeeperServer}
@@ -20,14 +23,17 @@ trait EmbeddedKafka extends Logging {
   implicit private val executionContext = ExecutionContext.fromExecutorService(executorService)
   private val stringSerializer = new StringSerializer()
 
+  lazy val topic = "Experience"
+
   // Override these values if needed
   def confZkPort = 6000
   def confKafkaServerPort = 6001
+  def retentionSec = 15
 
   def withKafka(body: (RunningEmbeddedKafka) => Unit) = {
     try {
-      withZookeeper {
-        withKafkaServer {
+      withZookeeper { zkClient =>
+        withKafkaServer(zkClient) {
           withProducer { runningEmbeddedKafka =>
             body(runningEmbeddedKafka)
           }
@@ -66,7 +72,7 @@ trait EmbeddedKafka extends Logging {
     }
   }
 
-  private def withZookeeper(body: => Any): Unit = {
+  private def withZookeeper(body: (ZkClient) => Any): Unit = {
     val log = getSublog("zkServer")
     val zkLogsDir = Directory.makeTemp("zookeeper-logs")
     val tickTime = 2000
@@ -83,7 +89,13 @@ trait EmbeddedKafka extends Logging {
     log.info(s"Zookeeper started on localhost:$confZkPort")
 
     try {
-      body
+      val zkClient = new ZkClient(s"localhost:$confZkPort", 10000, 10000, ZKStringSerializer)
+      try {
+        body(zkClient)
+      }
+      finally {
+        zkClient.close()
+      }
     }
     finally {
       log.debug(s"Shutting down Zookeeper...")
@@ -92,12 +104,12 @@ trait EmbeddedKafka extends Logging {
     }
   }
 
-  private def withKafkaServer(body: => Any): Unit = {
+  private def withKafkaServer(zkClient: ZkClient)(body: => Any): Unit = {
     val log = getSublog("kafkaServer")
 
     val kafkaLogDir = Directory.makeTemp("kafka")
 
-    val properties: Properties = new Properties
+    val properties = new Properties
     properties.setProperty("zookeeper.connect", s"localhost:$confZkPort")
     properties.setProperty("broker.id", "0")
     properties.setProperty("host.name", "localhost")
@@ -105,6 +117,8 @@ trait EmbeddedKafka extends Logging {
     properties.setProperty("port", confKafkaServerPort.toString)
     properties.setProperty("log.dir", kafkaLogDir.toAbsolute.path)
     properties.setProperty("log.flush.interval.messages", 1.toString)
+    properties.setProperty("log.retention.check.interval.ms", "1000")
+    properties.setProperty("log.cleaner.backoff.ms", "1000")
 
     val kafkaConfig = new KafkaConfig(properties)
     if (log.isDebugEnabled) {
@@ -120,6 +134,15 @@ trait EmbeddedKafka extends Logging {
 
     broker.startup()
     try {
+      // Log retention starts working only after 30 seconds from server start: LogManager.InitialTaskDelayMs
+      val topicProperties = new Properties()
+      topicProperties.setProperty("retention.ms", (retentionSec*10).toString)
+      topicProperties.setProperty("segment.ms", "1000")
+      topicProperties.setProperty("cleanup.policy", "delete")
+      topicProperties.setProperty("delete.retention.ms", "1000")
+      AdminUtils.createTopic(zkClient, topic, 1, 1, topicProperties)
+      log.info(s"Topic $topic created with $retentionSec sec retention (starts 30 seconds after server start)")
+
       body
     }
     finally {

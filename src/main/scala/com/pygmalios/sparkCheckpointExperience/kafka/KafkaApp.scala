@@ -12,8 +12,6 @@ import scala.annotation.tailrec
   * Embedded Apache Kafka.
   */
 object KafkaApp extends App with EmbeddedKafka {
-  val topic = "Experience"
-
   private val counter = new AtomicInteger()
   private val negativeFlag = new AtomicBoolean()
 
