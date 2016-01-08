@@ -22,7 +22,7 @@ object KafkaApp extends App with EmbeddedKafka {
   lazy val kafkaServerPort = 6001
 
   // How many seconds at minimum have to be left in the topic after log cleaning
-  lazy val retentionSec = 3600
+  lazy val retentionSec = 15
 
   // How often to check the log for retention
   lazy val retentionCheckSec = 15

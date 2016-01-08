@@ -24,6 +24,7 @@ object SparkApp extends App with Logging {
 
   private lazy val checkpointDir = "./checkpoints"
   private lazy val appName = "spark-checkpoint-experience"
+  private lazy val kafkaAutoOffsetReset = "smallest"
 
   private lazy val keyCountStateSpec = StateSpec.function[Key, (Key, Value), StreamState, (Key, Value)](countKeys _)
 
@@ -102,7 +103,7 @@ object SparkApp extends App with Logging {
     // Configure Kafka
     val kafkaParams = Map[String, String](
       "metadata.broker.list" -> s"localhost:${KafkaApp.kafkaServerPort}",
-      "auto.offset.reset" -> "smallest"
+      "auto.offset.reset" -> kafkaAutoOffsetReset
     )
 
     log.debug(s"Kafka direct stream params: $kafkaParams")

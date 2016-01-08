@@ -56,34 +56,62 @@ you can be sure that the `SparkApp` has:
 - **not missed** any of the messages sent to Kafka
 - and also has not **processed twice** any of them too
 
-*E.g. you want to see lines like this:
+*E.g. you want to see lines like this:*
 ```
 [INFO] [2016-01-08 16:18:10,025] [StreamingOutput]: Count = 890
 [INFO] [2016-01-08 16:18:10,025] [StreamingOutput]: Experience: 890 -> 890
 ```
-*
+
+## Hard reset
+
+In case `SparkApp` gets to a situation it cannot correctly continue or it cannot start at all:
+
+1. Stop it
+2. Delete `./checkpoints` directory
+
+You lose state but also all checkpointed data that most probably cause problems. 
  
 ## Scenario #1: Endless retention
 
 1. **Preparation:** set `KafkaApp.retentionSec = 3600` (one hour). Yes, one hour means forever now.
-2. Start **KafkaApp**.
-3. Start **SparkApp**.
+2. Start `KafkaApp`.
+3. Start `SparkApp`.
 4. Can keep looking at console output of `SparkApp` to monitor what's going on. Now feel free to **stop/start/kill** the
-   running `SparkApp` in any way you want and when you start it back, it should catch up, process only previously
-   unprocessed messages and update total count state accordingly.
+   running `SparkApp` in any way you want and when you start it back it should catch up, process only previously
+   unprocessed messages and update total count state accordingly. Check the log so that you are sure every message is
+   there exactly once. 
 
 *Periodically check console outputs of both apps for errors. There should be none.*
 
-
-## Problematic scenario: stop Spark, clean old Kafka logs, start Spark
+## Scenario #2: The problem of short Kafka retention
 
 [SPARK-12693](https://issues.apache.org/jira/browse/SPARK-12693)
 
-The probability of this case is in real world not that high, but definitely not impossible. If log cleaning happens
-between application stop and start then the application ends up in an erroneous state and cannot recover from it unless
-checkpoints are deleted. I have used smallest, largest and no offset reset and the behavior is the same.
+1. **Preparation:** set `KafkaApp.retentionSec = 15` (15 seconds) and make sure that `KafkaApp.retentionCheckSec` is
+   also set to a low value (15 seconds let's say).
+2. Start `KafkaApp` and **wait 30 seconds** so that retention scheduled jobs starts. (Kafka has an initial delay)
+3. Start `SparkApp` and try to stop/start/kill it just like in the previous scenario, but now there quite a big chance
+   that you will not be able to start the app back again.
+   
+**Wait longer than `KafkaApp.retentionCheckSec` with a restart** to reproduce this problem.
 
-## Don't wait longer than `KafkaApp.retentionCheckSec` with a restart
- 
-Otherwise log cleaning happens in Kafka and Spark Streaming is not able to restore state from checkpoint because the
+Log cleaning happens in Kafka and Spark Streaming is not able to restore state from checkpoint because the
 log offset does not exist in Kafka anymore.
+
+Basically this problem has nothing to do with Spark. It lies somewhere in integration between Spark and Kafka. If log
+cleaning happens between application stop and start then the application ends up in an erroneous state and cannot
+recover from it unless checkpoints are deleted.
+
+Kafka consumer has a setting `auto.offset.reset` which can be either `smallest` or `largest` but it doesn't help in case
+checkpointed is used because offsets stored using chepointing are used.
+
+## Conclusion
+
+**Spark Streaming checkpointing feature works reliably** even in case of brutal JVM killing (`Runtime.getRuntime.halt(-1)`).
+It processes every message exactly one assuming that the not-yet-processed messages are still available in Kafka log after
+restart.
+
+**In case of bad luck/extreme Kafka retention configuration checkpointed state has to be reset** to be able to restart the
+job. There are also other cases (implementation logic/data structure breaking changes) when you have to reset the accumulated
+state. So the bottom line is **don't use Spark Streaming checkpoint state to store anything you cannot easily reload**
+from an external source.
