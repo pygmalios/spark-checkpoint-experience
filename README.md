@@ -2,9 +2,12 @@
 Apache Spark Streaming checkpointing playground for everyone to learn by example. Important note is that it uses
 embedded Apache Kafka as the data source. That helps us to simulate some problematic scenarios.
  
- ## Intro
+## Intro
  
+## Don't wait longer than 15 seconds with a restart
  
+Otherwise log cleaning happens in Kafka and Spark Streaming is not able to restore state from checkpoint because the
+log offset does not exist in Kafka anymore.
 
 ![The Jimmy Henrix Experience](Are_You_Experienced_-_US_cover-edit.jpg?raw=true)
 
