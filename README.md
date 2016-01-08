@@ -6,8 +6,8 @@ embedded Apache Kafka as the data source. That helps us to simulate some problem
 
 This application contains two standalone runnable console applications:
 
-1) [KafkaApp](https://github.com/pygmalios/spark-checkpoint-experience/blob/master/src/main/scala/com/pygmalios/sparkCheckpointExperience/kafka/KafkaApp.scala)
-2) [SparkApp](https://github.com/pygmalios/spark-checkpoint-experience/blob/master/src/main/scala/com/pygmalios/sparkCheckpointExperience/spark/SparkApp.scala)
+1. [KafkaApp](https://github.com/pygmalios/spark-checkpoint-experience/blob/master/src/main/scala/com/pygmalios/sparkCheckpointExperience/kafka/KafkaApp.scala)
+2. [SparkApp](https://github.com/pygmalios/spark-checkpoint-experience/blob/master/src/main/scala/com/pygmalios/sparkCheckpointExperience/spark/SparkApp.scala)
 
 ### KafkaApp console application
 
@@ -19,9 +19,24 @@ app crashed.
 **Producer** sends every second a message to the **Experience** topic containing **key and value of a counter**. The
 counter is initialized to zero and increased by one for every message sent.
 
-The application reads from the standard input and it  
+The application reads from the standard input and you can **press enter to send one negative key to the topic**. This
+causes receiving application to fail intentionally to simulate a crash.
 
 ### SparkApp console application
+
+Creates Spark streaming context with **local[2]** as master. It of course uses checkpointing configured to store data in
+**./checkpoints** directory. If the application gets into a state when it cannot even start due to an error, delete this
+folder.
+
+It creates a [**direct stream (no receivers)**](http://spark.apache.org/docs/latest/streaming-kafka-integration.html#approach-2-direct-approach-no-receivers)
+to the previously started KafkaApp with **1 second batch duration**. It implements typical map/reduce algorithm to count
+number of received messages and **stores the count in a state**.
+ 
+### Logging
+
+Both applications write some useful information to console and they also create files in the **log** directory.
+KafkaApp produces **log/kafka.log** and SparkApp **spark.log** files. Special log file named **streaming-output.log**
+serves as an external output storage. It contains received messages and also changes of the state.
  
 ## Don't wait longer than 15 seconds with a restart
  
