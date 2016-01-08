@@ -113,5 +113,7 @@ restart.
 
 **In case of bad luck/extreme Kafka retention configuration checkpointed state has to be reset** to be able to restart the
 job. There are also other cases (implementation logic/data structure breaking changes) when you have to reset the accumulated
-state. So the bottom line is **don't use Spark Streaming checkpoint state to store anything you cannot easily reload**
+state.
+
+The bottom line is **don't use Spark Streaming checkpoint state to store anything you cannot easily reload**
 from an external source.
