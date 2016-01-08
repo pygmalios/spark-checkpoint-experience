@@ -79,7 +79,6 @@ object SparkApp extends App with Logging {
         case (k: Key, v: Value) =>
           val logMsg = f"${KafkaApp.topic}: $k%3s -> $v%3s"
           streamingOutputLog.info(logMsg)
-          log.info(logMsg)
 
           if (k < 0) {
             log.info(s"Brutally killing JVM")
@@ -102,7 +101,7 @@ object SparkApp extends App with Logging {
   private def createKafkaStream(ssc: StreamingContext): DStream[(Key, Value)] = {
     // Configure Kafka
     val kafkaParams = Map[String, String](
-      "metadata.broker.list" -> s"localhost:${KafkaApp.confKafkaServerPort}",
+      "metadata.broker.list" -> s"localhost:${KafkaApp.kafkaServerPort}",
       "auto.offset.reset" -> "smallest"
     )
 
@@ -118,9 +117,8 @@ object SparkApp extends App with Logging {
                         oldState: State[StreamState]): Option[(Key, Value)] = {
     val count = oldState.getOption().getOrElse(0) + 1
     oldState.update(count)
-    val stateMsg = f"Count of $key%3d: $count%3d"
+    val stateMsg = s"Count = $count"
     streamingOutputLog.info(stateMsg)
-    log.info(stateMsg)
 
     value
   }

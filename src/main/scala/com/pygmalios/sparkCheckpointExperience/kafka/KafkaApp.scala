@@ -15,6 +15,24 @@ object KafkaApp extends App with EmbeddedKafka {
   private val counter = new AtomicInteger()
   private val negativeFlag = new AtomicBoolean()
 
+  // Zookeeper port
+  lazy val zookeeperPort = 6000
+
+  // Kafka Server pokrt
+  lazy val kafkaServerPort = 6001
+
+  // How many seconds at minimum have to be left in the topic after log cleaning
+  lazy val retentionSec = 3600
+
+  // How often to check the log for retention
+  lazy val retentionCheckSec = 15
+
+  // Length of a single segment in the topic in number of seconds
+  lazy val segmentationSec = 1
+
+  // Name of the topic
+  lazy val topic = "Experience"
+
   // Start Zookeeper and Kafka, create topic
   withKafka { kafka =>
     // Publish a message every 1 second
