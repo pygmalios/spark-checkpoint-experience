@@ -5,6 +5,27 @@
         </encoder>
     </appender>
 
+    <appender name="KAFKA_FILE" class="ch.qos.logback.core.FileAppender">
+        <file>log/kafka.log</file>
+        <encoder>
+            <pattern>[%level] [%date{ISO8601}] [%logger]: %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <appender name="SPARK_FILE" class="ch.qos.logback.core.FileAppender">
+        <file>log/spark.log</file>
+        <encoder>
+            <pattern>[%level] [%date{ISO8601}] [%logger]: %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <appender name="STREAMING_OUTPUT_FILE" class="ch.qos.logback.core.FileAppender">
+        <file>log/streaming-output.log</file>
+        <encoder>
+            <pattern>[%date{ISO8601}]: %msg%n</pattern>
+        </encoder>
+    </appender>
+
     <!-- Kafka logging -->
     <logger name="org.apache.zookeeper" level="WARN"/>
     <logger name="org.apache.kafka" level="WARN" />
@@ -24,7 +45,19 @@
     <logger name="com.pygmalios.sparkCheckpointExperience.kafka.kafkaServer" level="INFO"/>
     <logger name="com.pygmalios.sparkCheckpointExperience.kafka.kafkaProducer" level="INFO"/>
 
+    <logger name="StreamingOutput" level="DEBUG">
+        <appender-ref ref="STREAMING_OUTPUT_FILE" />
+    </logger>
+
     <root level="INFO">
         <appender-ref ref="STDOUT" />
     </root>
+
+    <logger name="com.pygmalios.sparkCheckpointExperience.kafka">
+        <appender-ref ref="KAFKA_FILE" />
+    </logger>
+
+    <logger name="com.pygmalios.sparkCheckpointExperience.spark">
+        <appender-ref ref="SPARK_FILE" />
+    </logger>
 </configuration>

@@ -121,8 +121,9 @@ trait EmbeddedKafka extends Logging {
     properties.setProperty("port", confKafkaServerPort.toString)
     properties.setProperty("log.dir", kafkaLogDir.toAbsolute.path)
     properties.setProperty("log.flush.interval.messages", 1.toString)
-    properties.setProperty("log.retention.check.interval.ms", "1000")
-    properties.setProperty("log.cleaner.backoff.ms", "1000")
+
+    // How often Kafka checks if there is a segment to delete?
+    properties.setProperty("log.retention.check.interval.ms", "15000")
 
     val kafkaConfig = new KafkaConfig(properties)
     if (log.isDebugEnabled) {

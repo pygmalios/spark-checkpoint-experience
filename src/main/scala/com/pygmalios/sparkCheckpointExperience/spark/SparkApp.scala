@@ -8,14 +8,16 @@ import com.pygmalios.sparkCheckpointExperience.Logging
 import com.pygmalios.sparkCheckpointExperience.kafka.KafkaApp
 import org.apache.spark.SparkConf
 import org.apache.spark.streaming._
-import org.apache.spark.streaming.dstream.DStream
+import org.apache.spark.streaming.dstream.{DStream, MapWithStateDStream}
 import org.apache.spark.streaming.kafka.KafkaUtils
+import org.slf4j.LoggerFactory
 
 import scala.concurrent._
 
 object SparkApp extends App with Logging {
   private type Key = Int
-  private type Value = String
+  private type Value = Int
+  private type StreamState = Int
 
   private val lastMessage: Option[Value] = None
   private val lastMessageProcessesed: AtomicBoolean = new AtomicBoolean(false)
@@ -23,14 +25,19 @@ object SparkApp extends App with Logging {
   private lazy val checkpointDir = "./checkpoints"
   private lazy val appName = "spark-checkpoint-experience"
 
-  private lazy val stringStateSpec = StateSpec.function[Key, Value, String, (Key, Value)](stateMapping _)
+  private lazy val keyCountStateSpec = StateSpec.function[Key, (Key, Value), StreamState, (Key, Value)](countKeys _)
+
+  // Use Logback as streaming output action
+  lazy val streamingOutputLog = LoggerFactory.getLogger("StreamingOutput")
 
   withSsc() { inputStream =>
-    inputStream.mapWithState(stringStateSpec)
+    // Count all messages in a state
+    val counterStream = inputStream.map { case (k, v) => 1 -> (k, v) }
+    counterStream.mapWithState(keyCountStateSpec)
   }
 
-  private def withSsc()(action: (DStream[(Key, Value)]) => DStream[(Key, Value)]): Unit = {
-    val ssc = StreamingContext.getOrCreate(checkpointDir, () => createSsc(action))
+  private def withSsc()(action: (DStream[(Key, Value)] => MapWithStateDStream[Key, (Key, Value), StreamState, (Key, Value)])): Unit = {
+    val ssc = StreamingContext.getOrCreate(checkpointDir, () => createSsc(action), createOnError = true)
 
     if (lastMessage.nonEmpty) {
       Future {
@@ -70,7 +77,9 @@ object SparkApp extends App with Logging {
     action(kafkaStream).foreachRDD { rdd =>
       rdd.foreach {
         case (k: Key, v: Value) =>
-          log.info(f"${KafkaApp.topic}: $k%3s -> $v%3s")
+          val logMsg = f"${KafkaApp.topic}: $k%3s -> $v%3s"
+          streamingOutputLog.info(logMsg)
+          log.info(logMsg)
 
           if (k < 0) {
             log.info(s"Brutally killing JVM")
@@ -100,17 +109,20 @@ object SparkApp extends App with Logging {
     log.debug(s"Kafka direct stream params: $kafkaParams")
 
     // Create direct Kafka stream
-    KafkaUtils.createDirectStream[Key, Value, IntDecoder, StringDecoder](ssc, kafkaParams, Set(KafkaApp.topic))
+    KafkaUtils.createDirectStream[Key, Value, IntDecoder, IntDecoder](ssc, kafkaParams, Set(KafkaApp.topic))
   }
 
-  private def stateMapping(time: Time,
-                           key: Key,
-                           value: Option[Value],
-                           oldState: State[String]): Option[(Key, String)] = {
-    val newState = value.toString
-    log.debug(s"State mapping: [key: $key, value: $value, $oldState -> $newState]")
-    oldState.update(newState)
-    value.map(key -> _)
+  private def countKeys(time: Time,
+                        key: Key,
+                        value: Option[(Key, Value)],
+                        oldState: State[StreamState]): Option[(Key, Value)] = {
+    val count = oldState.getOption().getOrElse(0) + 1
+    oldState.update(count)
+    val stateMsg = f"Count of $key%3d: $count%3d"
+    streamingOutputLog.info(stateMsg)
+    log.info(stateMsg)
+
+    value
   }
 }
 
